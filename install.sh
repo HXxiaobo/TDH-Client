@@ -121,6 +121,11 @@ DIR=`dirname $0`
 DIR=`cd $DIR;pwd`
 WHITCHTDH=$1                     # The type of TDH cluster, and cast to lower.
 upper_to_lower $WHITCHTDH
+#when parameter is zero,print message
+if [ $# -eq 0 ];then
+  print_message
+  exit
+fi
 #安装脚本的配置文件
 source ${DIR}/install.conf
 #以下的变量意义在install.conf能够找到
