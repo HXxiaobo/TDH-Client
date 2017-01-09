@@ -4,9 +4,13 @@
 #-----------------------------------------#
 #判断jdk是否已经安装
 function installed_jdk {
-java_v=`java -version 2>>/tmp/hadoop-java.log`
+if [ -z ${JAVA_HOME} ];then
+   echo "The JAVA_HOME is not set!"
+   exit
+fi
+java_v=`${JAVA_HOME}/bin/java -version 2>>/tmp/hadoop-java.log`
 if [ $? -eq 0 ];then
-    echo "Found Java has installed..."
+    echo "Found JAVA_HOME has set!"
     jdk_version_check
 else
    echo "There is no JDK environment,please install JDK1.7.*!!"
@@ -19,9 +23,10 @@ fi
 
 #如果已安装，使用这个方法来判断jdk是否是1.7的版本
 function jdk_version_check {
-java_v3=`java -version 2>>/tmp/hadoop-java.log`
+java_v3=`${JAVA_HOME}/bin/java -version 2>>/tmp/hadoop-java.log`
 info2=`cat /tmp/hadoop-java.log |grep 1.7.*`
 if [ $? -eq 0 ];then
+    export PATH=$PATH:$JAVA_HOME/bin
     echo "Client has installed 1.7.*, no need to install..."
 else
     echo "The Java's version is not 1.7.*, please contact the administrator to check the environment firstly..."
@@ -120,9 +125,9 @@ upper_to_lower $WHITCHTDH
 source ${DIR}/install.conf
 #以下的变量意义在install.conf能够找到
 User=$Username
-check_user >> /dev/null 2>&1
+check_user 
 #the user's GID
-GID=`cat /etc/passwd |grep -w ${User} | awk -F ':' '{print $4}'` >> /dev/null 2>&1
+GID=`cat /etc/passwd |awk -F ':' '{print $1,$4}'|grep -w ${User} | awk -F ' ' '{print $2}'` >> /dev/null 2>&1
 if [ $? -ne 0 ];then
    echo "The User [$User] not in anyone Group!"
    exit
@@ -132,7 +137,7 @@ if [ -z ${GID} ];then
    exit
 fi
 #the user's GROUP
-Group=`cat /etc/group |grep -w ${GID}| awk -F ':' '{print $1}' ` >> /dev/null 2>&1
+Group=`cat /etc/group |awk -F ':' '{print $1,$3}' |grep -w ${GID}| awk -F ' ' '{print $1}' ` >> /dev/null 2>&1
 if [ $? -ne 0 ];then
    echo "The User [$User] not in anyone Group!"
    exit
@@ -155,7 +160,6 @@ if [ $# -eq 0 ];then
 fi
 #check the user whether exist
 check_user 
-Homedir=`cat /etc/passwd |grep -w "${User}" | awk -F ':' '{print $6}'` >>/dev/null 2>&1
 #the parameters
 case $WHITCHTDH in
   #usage flags
@@ -188,7 +192,7 @@ fi
 #             Install kerberos's rpm       #
 #------------------------------------------#
 #rpminfo=`rpm -qa |grep krb5-client-1.6.3-133.49.54.1.x86_64.rpm`
-rpminfo=`klist`
+rpminfo=`klist` >>/dev/null 2>&1
 if [ $? -eq 0 ];then
   echo "The Kerberos has installed!!!"
 else
@@ -202,9 +206,9 @@ else
 fi
 
 echo "sh ${DIR}/hadoopconfigupdater/update.sh ${WHITCHTDH}" >>/etc/rc.d/after.local
-
-
-Homedir=`cat /etc/passwd |grep -w "${User}" | awk -F ':' '{print $6}'` >>/dev/null 2>&1
+#judge the user's home_dir
+Uid=`cat /etc/passwd | awk -F ':' '{print $1,$3}'|grep -w ${User}|awk -F ' ' '{print $2}'` >>/dev/null 2>&1
+Homedir=`cat /etc/passwd |awk -F ':' '{print $3,$6}'|grep -w "${Uid}" |awk -F ' ' '{print $2}'` >>/dev/null 2>&1
 
 if [ $? -eq 0 ];then
   chown -R "${User}":"${Group}" ${DIR}/
@@ -231,7 +235,7 @@ else
 fi
   if [ -f ${keytabdir} ];then
     echo "kinit -kt ${keytabdir} ${krb5User}" >> ${Homedir}/.bashrc
-    echo "alias bbeeline=${DIR}/inceptor/bin/'beeline -u \"jdbc:hive2://BDMASD01:10000,BDMASF01:10000/${DB};pricipal=hive/bdmasd01@CMBC,hive/bdmasf01@CMBC;authentication=kerberos;kuser=${krb5User}@CMBC;krb5conf=/etc/krb5.conf;keytab=${keytabdir}\"'" >> ${Homedir}/.bashrc
+    echo "alias bbeeline=${DIR}/inceptor/bin/'beeline -u \"jdbc:hive2://BDMASD01:10000,BDMASF01:10000/${DB};principal=hive/bdmasd01@CMBC,hive/bdmasf01@CMBC;authentication=kerberos;kuser=${krb5User}@CMBC;krb5conf=/etc/krb5.conf;keytab=${keytabdir}\"'" >> ${Homedir}/.bashrc
   else
     echo "The Keytab [ ${keytabdir} ] is not exist,please check it again."
   fi
@@ -248,7 +252,7 @@ else
 fi
   if [ -f ${keytabdir} ];then
     echo "kinit -kt ${keytabdir} ${krb5User}" >> ${Homedir}/.bashrc
-    echo "alias obeeline=${DIR}/inceptor/bin/'beeline -u \"jdbc:hive2://BMMASB01:10000/${DB};pricipal=hive/bmmasb01@CMBC;authentication=kerberos;kuser=${krb5User}@CMBC;krb5conf=/etc/krb5.conf;keytab=${keytabdir}\"'" >> ${Homedir}/.bashrc
+    echo "alias obeeline=${DIR}/inceptor/bin/'beeline -u \"jdbc:hive2://BMMASB01:10000/${DB};principal=hive/bmmasb01@CMBC;authentication=kerberos;kuser=${krb5User}@CMBC;krb5conf=/etc/krb5.conf;keytab=${keytabdir}\"'" >> ${Homedir}/.bashrc
   else
     echo "The Keytab [ ${keytabdir} ] is not exist,please check it again."
   fi
@@ -265,7 +269,7 @@ else
 fi
   if [ -f ${keytabdir} ];then
     echo "kinit -kt ${keytabdir} ${krb5User}" >> ${Homedir}/.bashrc
-    echo "alias tbeeline=${DIR}/inceptor/bin/'beeline -u \"jdbc:hive2://BIGL1TMP:10000,BIGL2TMP:10000/${DB};pricipal=hive/bigl1tmp@CMBCTEST,hive/bigl2tmp@CMBCTEST;authentication=kerberos;kuser=${krb5User}@CMBCTEST;krb5conf=/etc/krb5.conf;keytab=${keytabdir}\"'" >> ${Homedir}/.bashrc
+    echo "alias tbeeline=${DIR}/inceptor/bin/'beeline -u \"jdbc:hive2://BIGL1TMP:10000,BIGL2TMP:10000/${DB};principal=hive/bigl1tmp@CMBCTEST,hive/bigl2tmp@CMBCTEST;authentication=kerberos;kuser=${krb5User}@CMBCTEST;krb5conf=/etc/krb5.conf;keytab=${keytabdir}\"'" >> ${Homedir}/.bashrc
   else
     echo "The Keytab [ ${keytabdir} ] is not exist,please check it again."
   fi 
